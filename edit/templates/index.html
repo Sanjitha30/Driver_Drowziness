@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drowsiness and Yawn Detection</title>
+    <style>
+        /* Global Styles */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #2c2c2c, #121212);
+            color: #fff;
+            overflow: hidden;
+        }
+        .dashboard {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0, 0, 0, 0.7);
+            width: 80%;
+            height: 80%;
+            border-radius: 20px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+        }
+
+        /* Header Styles */
+        header {
+            background-color: #333;
+            color: #fff;
+            width: 100%;
+            padding: 20px 0;
+            text-align: center;
+            font-size: 2em;
+            font-weight: bold;
+            border-top-left-radius: 20px;
+            border-top-right-radius: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Video Container Styles */
+        .video-container {
+            width: 80%;
+            height: 50%;
+            background-color: #000;
+            border: 3px solid #00ff00;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            animation: fadeIn 1s ease-in-out;
+        }
+        img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Toast Notification Styles */
+        .toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #444;
+            color: #fff;
+            text-align: center;
+            border-radius: 5px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 30px;
+            font-size: 1em;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            opacity: 0.9;
+            transition: visibility 0.5s, opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+        }
+        .toast.show {
+            visibility: visible;
+            opacity: 1;
+            transform: translateX(-50%) translateY(-10px);
+        }
+
+        /* Control Buttons Styles */
+        .control-buttons {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            margin-top: 20px;
+        }
+        .control-button {
+            padding: 15px 25px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.3s;
+            background-color: #007bff;
+            color: #fff;
+            margin: 0 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        .control-button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        .control-button:hover {
+            transform: translateY(-5px);
+        }
+        .control-button:active {
+            background-color: #0056b3;
+        }
+
+        /* Loading Spinner Styles */
+        .spinner {
+            display: none;
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 255, 255, 0.1);
+            border-top: 5px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-top: 20px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Media Query for Responsiveness */
+        @media (max-width: 768px) {
+            .dashboard {
+                width: 90%;
+            }
+            .video-container {
+                width: 100%;
+                height: 60%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <header>Drowsiness and Yawn Detection</header>
+        <div class="video-container">
+            <img id="video_feed" src="{{ url_for('video_feed') }}" alt="Camera Feed">
+        </div>
+        <div id="drowsiness_toast" class="toast">Drowsiness Detected</div>
+        <div id="yawn_toast" class="toast">Yawn Detected</div>
+        <div class="control-buttons">
+            <button id="enable_system" class="control-button" onclick="toggleSystem(true)">Enable System</button>
+            <button id="disable_system" class="control-button" onclick="toggleSystem(false)" disabled>Disable System</button>
+        </div>
+        <div class="spinner" id="spinner"></div>
+    </div>
+
+    <script>
+        let systemEnabled = false;
+
+        function showToast(message) {
+            const toast = document.getElementById(message);
+            toast.className = "toast show";
+            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+        }
+
+        function playAudioAlert(type) {
+            const audio = new Audio(type === 'drowsiness' ? 'drowsiness_alert.mp3' : 'yawn_alert.mp3');
+            audio.play();
+        }
+
+        function updateAlerts() {
+            if (systemEnabled) {
+                fetch('/alert_status')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.drowsiness) {
+                            showToast('drowsiness_toast');
+                            playAudioAlert('drowsiness');
+                        }
+                        if (data.yawn) {
+                            showToast('yawn_toast');
+                            playAudioAlert('yawn');
+                        }
+                    });
+            }
+        }
+
+        function toggleSystem(enabled) {
+            systemEnabled = enabled;
+            const enableButton = document.getElementById('enable_system');
+            const disableButton = document.getElementById('disable_system');
+            const spinner = document.getElementById('spinner');
+
+            enableButton.disabled = true;
+            disableButton.disabled = true;
+            spinner.style.display = 'block';
+
+            fetch('/toggle_system', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ enabled })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('System enabled:', data.system_enabled);
+                if (data.system_enabled) {
+                    document.getElementById('video_feed').style.display = 'block';
+                    enableButton.disabled = true;
+                    disableButton.disabled = false;
+                } else {
+                    document.getElementById('video_feed').style.display = 'none';
+                    enableButton.disabled = false;
+                    disableButton.disabled = true;
+                }
+                spinner.style.display = 'none';
+            });
+        }
+
+        setInterval(updateAlerts, 1000);
+    </script>
+</body>
+</html>
